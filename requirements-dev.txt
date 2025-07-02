@@ -1,0 +1,27 @@
+# 开发依赖
+-r requirements.txt
+
+# 代码格式化和检查
+black>=22.0.0
+flake8>=4.0.0
+isort>=5.10.0
+mypy>=0.950
+
+# 测试框架
+pytest>=7.0.0
+pytest-cov>=3.0.0
+pytest-qt>=4.0.0
+pytest-benchmark>=3.4.0
+pytest-mock>=3.7.0
+
+# 代码质量
+pylint>=2.13.0
+bandit>=1.7.0
+
+# 构建和打包
+PyInstaller>=5.0.0
+wheel>=0.37.0
+
+# 开发工具
+pre-commit>=2.17.0
+tox>=3.24.0 

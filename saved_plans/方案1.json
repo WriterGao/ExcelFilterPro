@@ -1,0 +1,38 @@
+{
+  "plan_id": "b3ef3ab4-59a8-42a7-80f1-19fa1e303e2f",
+  "name": "方案1",
+  "description": "包含 2 个数据映射配置",
+  "created_time": "2025-07-02T00:28:27.760558",
+  "mappings": [
+    {
+      "mapping_id": "daebd35b-9431-4c5c-a6bc-77698cfe9017",
+      "name": "a",
+      "description": "",
+      "source_file": "4月东宇母线不平衡率 .xlsx",
+      "source_match_coordinate": "B",
+      "source_match_value": "202 2号主变",
+      "source_value_coordinate": "C",
+      "target_file": "/Users/gao/Documents/小目标/Excel筛选器/输出模板.xlsx",
+      "target_match_coordinate": "A",
+      "target_match_value": "2",
+      "target_insert_coordinate": "B",
+      "match_operator": "等于",
+      "overwrite_existing": true
+    },
+    {
+      "mapping_id": "2f1c6dfe-5b63-44c3-b852-8d77d34d18fc",
+      "name": "b",
+      "description": "",
+      "source_file": "4月东宇母线不平衡率 .xlsx",
+      "source_match_coordinate": "B",
+      "source_match_value": "201 1号主变",
+      "source_value_coordinate": "C",
+      "target_file": "/Users/gao/Documents/小目标/Excel筛选器/输出模板.xlsx",
+      "target_match_coordinate": "A",
+      "target_match_value": "高薪员工",
+      "target_insert_coordinate": "B",
+      "match_operator": "等于",
+      "overwrite_existing": true
+    }
+  ]
+}
