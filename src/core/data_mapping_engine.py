@@ -122,11 +122,23 @@ class DataMappingEngine:
         match_column = df.iloc[:, match_col_index]
         value_column = df.iloc[:, value_col_index]
         
+        # 新增：只在指定行范围查找
+        if mapping.source_match_row_range:
+            start, end = mapping.source_match_row_range
+            # Excel行号从1开始，DataFrame索引从0开始
+            match_column = match_column.iloc[start-1:end]
+            value_column = value_column.iloc[start-1:end]
+            self.logger.info(f"   仅在第{start}行到第{end}行查找匹配")
+        
         # 打印匹配列的所有值
         self.logger.info(f"   源匹配列(第{match_col_index+1}列)的所有值:")
         for idx, val in match_column.items():
             val_str = str(val) if pd.notna(val) else "空值"
-            self.logger.info(f"     第{idx+1}行: '{val_str}'")
+            if isinstance(idx, int):
+                row_no = idx + 1
+            else:
+                row_no = idx
+            self.logger.info(f"     第{row_no}行: '{val_str}'")
         
         self.logger.info(f"   正在查找匹配值: '{mapping.source_match_value}' (操作符: {mapping.match_operator.value})")
         
@@ -142,9 +154,13 @@ class DataMappingEngine:
         if matched_indices:
             self.logger.info(f"   匹配行的详细信息:")
             for idx in matched_indices:
-                match_val = match_column.iloc[idx]
-                value_val = value_column.iloc[idx]
-                self.logger.info(f"     第{idx+1}行: 匹配列='{match_val}', 取值列='{value_val}'")
+                match_val = match_column.loc[idx]
+                value_val = value_column.loc[idx]
+                if isinstance(idx, int):
+                    row_no = idx + 1
+                else:
+                    row_no = idx
+                self.logger.info(f"     第{row_no}行: 匹配列='{match_val}', 取值列='{value_val}'")
         
         # 提取匹配行的值
         source_values = value_column[matched_rows].dropna().tolist()
@@ -171,11 +187,21 @@ class DataMappingEngine:
         # 查找匹配的行
         match_column = df.iloc[:, match_col_index]
         
+        # 新增：只在指定行范围查找
+        if mapping.target_match_row_range:
+            start, end = mapping.target_match_row_range
+            match_column = match_column.iloc[start-1:end]
+            self.logger.info(f"   仅在第{start}行到第{end}行查找匹配")
+        
         # 打印目标匹配列的所有值
         self.logger.info(f"   目标匹配列(第{match_col_index+1}列)的所有值:")
         for idx, val in match_column.items():
             val_str = str(val) if pd.notna(val) else "空值"
-            self.logger.info(f"     第{idx+1}行: '{val_str}'")
+            if isinstance(idx, int):
+                row_no = idx + 1
+            else:
+                row_no = idx
+            self.logger.info(f"     第{row_no}行: '{val_str}'")
         
         self.logger.info(f"   正在查找目标匹配值: '{mapping.target_match_value}'")
         
@@ -192,8 +218,12 @@ class DataMappingEngine:
         if target_positions:
             self.logger.info(f"   目标匹配行的详细信息:")
             for pos in target_positions:
-                match_val = match_column.iloc[pos]
-                self.logger.info(f"     第{pos+1}行: 匹配列='{match_val}'")
+                match_val = match_column.loc[pos]
+                if isinstance(pos, int):
+                    row_no = pos + 1
+                else:
+                    row_no = pos
+                self.logger.info(f"     第{row_no}行: 匹配列='{match_val}'")
         
         self.logger.info(f"✅ 在目标文件找到 {len(target_positions)} 个匹配位置")
         return target_positions
@@ -219,7 +249,11 @@ class DataMappingEngine:
         self.logger.info(f"   插入前目标列(第{insert_col_index+1}列)的值:")
         for idx, val in insert_column.items():
             val_str = str(val) if pd.notna(val) else "空值"
-            self.logger.info(f"     第{idx+1}行: '{val_str}'")
+            if isinstance(idx, int):
+                row_no = idx + 1
+            else:
+                row_no = idx
+            self.logger.info(f"     第{row_no}行: '{val_str}'")
         
         # 插入数据
         insert_count = 0
@@ -258,7 +292,11 @@ class DataMappingEngine:
         self.logger.info(f"   插入后目标列(第{insert_col_index+1}列)的值:")
         for idx, val in updated_insert_column.items():
             val_str = str(val) if pd.notna(val) else "空值"
-            self.logger.info(f"     第{idx+1}行: '{val_str}'")
+            if isinstance(idx, int):
+                row_no = idx + 1
+            else:
+                row_no = idx
+            self.logger.info(f"     第{row_no}行: '{val_str}'")
         
         self.logger.info(f"✅ 成功插入 {insert_count} 个值到目标文件")
         return updated_target_data

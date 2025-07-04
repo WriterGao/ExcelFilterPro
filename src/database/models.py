@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import List, Optional, Any, Dict
 import json
 from enum import Enum
+from pydantic import BaseModel
 
 
 class FilterOperator(Enum):
@@ -310,8 +311,7 @@ class AppSetting:
         )
 
 
-@dataclass
-class DataMapping:
+class DataMapping(BaseModel):
     """数据映射配置"""
     mapping_id: str
     name: str
@@ -322,12 +322,16 @@ class DataMapping:
     source_match_coordinate: ExcelCoordinate  # 源匹配列坐标（如B列）
     source_match_value: Any               # 源匹配值（如'202 2号主变'）
     source_value_coordinate: ExcelCoordinate  # 源取值列坐标（如C列）
+    # 新增可选字段
+    source_match_row_range: Optional[List[int]] = None  # [起始行, 结束行]，Excel行号，从1开始
     
     # 目标数据配置  
     target_file: str                      # 目标文件名
     target_match_coordinate: ExcelCoordinate  # 目标匹配列坐标（如A列）
     target_match_value: Any               # 目标匹配值（如'202 2号主变'）
     target_insert_coordinate: ExcelCoordinate # 目标插入列坐标（如D列）
+    # 新增可选字段
+    target_match_row_range: Optional[List[int]] = None
     
     # 操作配置
     match_operator: FilterOperator = FilterOperator.EQUALS  # 匹配操作符
