@@ -597,14 +597,20 @@ class MainWindow(QMainWindow):
                             source_data[mapping.source_file] = df
                 
                 if mapping.target_file not in target_data:
-                    # 智能加载目标文件：优先使用用户上传的模板文件
+                    # 智能加载目标文件：优先使用映射配置中的目标文件路径
                     template_path = None
-                    if hasattr(self.upload_widget, 'template_path') and self.upload_widget.template_path:
-                        template_path = self.upload_widget.template_path
                     
-                    # 强制使用当前目录下的输出模板.xlsx文件（调试用）
-                    if not template_path or not Path(template_path).exists():
-                        fallback_template = Path("输出模板.xlsx")
+                    # 首先尝试映射配置中的目标文件路径
+                    if mapping.target_file and Path(mapping.target_file).exists():
+                        template_path = mapping.target_file
+                        self.logger.info(f"🎯 使用映射配置中的目标文件: {template_path}")
+                    # 然后尝试用户上传的模板文件
+                    elif hasattr(self.upload_widget, 'template_path') and self.upload_widget.template_path:
+                        template_path = self.upload_widget.template_path
+                        self.logger.info(f"🎯 使用用户上传的模板文件: {template_path}")
+                    # 最后尝试当前目录下的111_fixed.xlsx文件
+                    else:
+                        fallback_template = Path("111_fixed.xlsx")
                         if fallback_template.exists():
                             template_path = str(fallback_template)
                             self.logger.info(f"🔧 使用备用模板文件: {template_path}")
@@ -666,31 +672,47 @@ class MainWindow(QMainWindow):
                 mappings, source_data, target_data
             )
             
-            # 保存结果到文件
-            self.logger.info("💾 开始保存映射结果到文件...")
-            saved_files = []
+            # 直接更新原始模板文件
+            self.logger.info("💾 开始更新原始模板文件...")
+            updated_files = []
             for file_key, result_df in result_data.items():
                 try:
-                    # 生成输出文件名
-                    if file_key.endswith('.xlsx'):
-                        output_filename = file_key.replace('.xlsx', '_结果.xlsx')
+                    # 找到对应的原始模板文件路径
+                    template_path = None
+                    if hasattr(self.upload_widget, 'template_path') and self.upload_widget.template_path:
+                        template_path = self.upload_widget.template_path
+                    
+                    # 如果没有上传的模板，使用默认模板
+                    if not template_path or not Path(template_path).exists():
+                        fallback_template = Path("输出模板.xlsx")
+                        if fallback_template.exists():
+                            template_path = str(fallback_template)
+                    
+                    if template_path and Path(template_path).exists():
+                        # 直接覆盖原始模板文件
+                        result_df.to_excel(template_path, index=False, engine='openpyxl')
+                        updated_files.append(template_path)
+                        self.logger.info(f"✅ 直接更新模板文件: {template_path}")
+                        
+                        # 显示更新的数据内容
+                        self.logger.info(f"📄 更新的数据内容 ({result_df.shape}):")
+                        for idx, row in result_df.iterrows():
+                            row_data = [str(val) if val is not None else "空" for val in row.values]
+                            self.logger.info(f"   第{idx+1}行: {row_data[:5]}")  # 只显示前5列
                     else:
-                        output_filename = f"{file_key}_结果.xlsx"
-                    
-                    # 保存到当前目录
-                    output_path = Path(output_filename)
-                    result_df.to_excel(output_path, index=False, engine='openpyxl')
-                    saved_files.append(str(output_path))
-                    self.logger.info(f"✅ 保存结果文件: {output_path}")
-                    
-                    # 显示保存的数据内容
-                    self.logger.info(f"📄 保存的数据内容 ({result_df.shape}):")
-                    for idx, row in result_df.iterrows():
-                        row_data = [str(val) if val is not None else "空" for val in row.values]
-                        self.logger.info(f"   第{idx+1}行: {row_data[:5]}")  # 只显示前5列
+                        # 如果没有找到模板文件，创建新的结果文件
+                        if file_key.endswith('.xlsx'):
+                            output_filename = file_key.replace('.xlsx', '_结果.xlsx')
+                        else:
+                            output_filename = f"{file_key}_结果.xlsx"
+                        
+                        output_path = Path(output_filename)
+                        result_df.to_excel(output_path, index=False, engine='openpyxl')
+                        updated_files.append(str(output_path))
+                        self.logger.info(f"✅ 创建结果文件: {output_path}")
                         
                 except Exception as e:
-                    self.logger.error(f"❌ 保存文件失败 {file_key}: {e}")
+                    self.logger.error(f"❌ 更新文件失败 {file_key}: {e}")
             
             # 隐藏进度条
             self.hide_progress()
@@ -699,11 +721,11 @@ class MainWindow(QMainWindow):
             self.logger.info(f"数据映射完成，映射数: {len(mappings)}")
             
             # 显示结果
-            if saved_files:
-                files_info = '\n'.join(saved_files)
+            if updated_files:
+                files_info = '\n'.join(updated_files)
                 QMessageBox.information(
                     self, "成功", 
-                    f"数据映射执行完成！\n处理了 {len(mappings)} 个映射规则。\n\n保存的文件:\n{files_info}"
+                    f"数据映射执行完成！\n处理了 {len(mappings)} 个映射规则。\n\n更新的文件:\n{files_info}"
                 )
             else:
                 QMessageBox.information(
