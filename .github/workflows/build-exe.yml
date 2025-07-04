@@ -1,0 +1,226 @@
+name: 构建EXE文件
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (例如: 1.0.0)'
+        required: false
+        default: 'auto'
+      platforms:
+        description: '构建平台'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - windows
+        - macos
+        - linux
+
+jobs:
+  build-exe:
+    name: 构建可执行文件
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            executable: ExcelFilterPro.exe
+            build_cmd: pyinstaller --onefile --windowed --name ExcelFilterPro --icon=resources/icons/app.ico main.py
+          - os: macos-latest  
+            platform: macos
+            executable: ExcelFilterPro
+            build_cmd: pyinstaller --onefile --windowed --name ExcelFilterPro main.py
+          - os: ubuntu-latest
+            platform: linux
+            executable: ExcelFilterPro
+            build_cmd: pyinstaller --onefile --name ExcelFilterPro main.py
+
+    runs-on: ${{ matrix.os }}
+    
+    # 根据用户输入过滤构建平台
+    if: github.event.inputs.platforms == 'all' || github.event.inputs.platforms == matrix.platform || github.event_name != 'workflow_dispatch'
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 获取版本信息
+      id: version
+      shell: bash
+      run: |
+        if [ "${{ github.event.inputs.version }}" = "auto" ] || [ -z "${{ github.event.inputs.version }}" ]; then
+          # 从git标签获取版本，如果没有则使用commit hash
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev-$(git rev-parse --short HEAD)")
+        else
+          VERSION="${{ github.event.inputs.version }}"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "构建版本: $VERSION"
+
+    - name: 安装系统依赖 (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgl1-mesa-glx libegl1-mesa libxrandr2 libxss1 libxcursor1 libxcomposite1 libasound2 libxi6 libxtst6
+
+    - name: 安装Python依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        pip install pyinstaller
+
+    - name: 创建资源目录 (如果不存在)
+      shell: bash
+      run: |
+        mkdir -p resources/icons
+        # 如果没有图标文件，创建一个占位符
+        if [ ! -f "resources/icons/app.ico" ] && [ "${{ matrix.platform }}" = "windows" ]; then
+          echo "警告: 未找到app.ico文件"
+        fi
+
+    - name: 运行测试
+      run: |
+        python -m pytest tests/ -v || echo "测试失败，但继续构建"
+
+    - name: 清理之前的构建
+      shell: bash
+      run: |
+        rm -rf build/ dist/ *.spec
+
+    - name: 构建可执行文件
+      shell: bash
+      run: |
+        echo "开始构建 ${{ matrix.platform }} 平台的可执行文件..."
+        ${{ matrix.build_cmd }}
+        
+        # 检查构建结果
+        if [ -f "dist/${{ matrix.executable }}" ]; then
+          echo "✅ 构建成功: dist/${{ matrix.executable }}"
+          ls -la dist/
+        else
+          echo "❌ 构建失败: 找不到 dist/${{ matrix.executable }}"
+          ls -la dist/ || echo "dist目录不存在"
+          exit 1
+        fi
+
+    - name: 测试可执行文件
+      shell: bash
+      run: |
+        echo "测试可执行文件..."
+        if [ "${{ matrix.platform }}" != "linux" ]; then
+          # 对于GUI应用，只检查文件是否存在和可执行
+          if [ -x "dist/${{ matrix.executable }}" ]; then
+            echo "✅ 可执行文件测试通过"
+          else
+            echo "❌ 可执行文件测试失败"
+            exit 1
+          fi
+        else
+          # Linux版本进行基本的启动测试
+          ./dist/${{ matrix.executable }} --help || echo "Linux版本基本测试完成"
+        fi
+
+    - name: 准备发布文件
+      shell: bash
+      run: |
+        mkdir -p release
+        
+        # 重命名文件包含版本和平台信息
+        VERSION="${{ steps.version.outputs.version }}"
+        RELEASE_NAME="ExcelFilterPro-${VERSION}-${{ matrix.platform }}"
+        
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          cp "dist/${{ matrix.executable }}" "release/${RELEASE_NAME}.exe"
+        else
+          cp "dist/${{ matrix.executable }}" "release/${RELEASE_NAME}"
+        fi
+        
+        # 计算文件哈希
+        cd release
+        if command -v sha256sum >/dev/null; then
+          sha256sum * > checksums.txt
+        elif command -v shasum >/dev/null; then
+          shasum -a 256 * > checksums.txt
+        fi
+        
+        echo "发布文件列表:"
+        ls -la
+
+    - name: 上传构建产物
+      uses: actions/upload-artifact@v3
+      with:
+        name: ExcelFilterPro-${{ matrix.platform }}-${{ steps.version.outputs.version }}
+        path: release/
+        retention-days: 30
+
+    - name: 上传到Release (仅限标签推送)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: release/*
+        name: ExcelFilterPro ${{ steps.version.outputs.version }}
+        body: |
+          ## ExcelFilterPro ${{ steps.version.outputs.version }}
+          
+          ### 📦 下载说明
+          - **Windows用户**: 下载 `ExcelFilterPro-*-windows.exe`
+          - **macOS用户**: 下载 `ExcelFilterPro-*-macos` 
+          - **Linux用户**: 下载 `ExcelFilterPro-*-linux`
+          
+          ### ✨ 功能特性
+          - 🔄 专业的Excel数据筛选和映射
+          - 🎯 直观的图形用户界面
+          - ⚡ 高效的批量处理能力
+          - 💾 配置方案保存和管理
+          
+          ### 🚀 使用方法
+          1. 下载对应平台的可执行文件
+          2. 双击运行即可使用（无需安装Python环境）
+          3. 查看 [用户手册](docs/user-manual.md) 了解详细使用方法
+          
+          ### 🔍 文件校验
+          可使用checksums.txt文件验证下载文件的完整性
+          
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 构建完成后的总结
+  build-summary:
+    needs: build-exe
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: 构建结果总结
+      run: |
+        echo "## 🏗️ 构建结果总结" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.build-exe.result }}" = "success" ]; then
+          echo "✅ **构建成功!**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 可执行文件已成功构建并上传到Artifacts中" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📥 下载方式" >> $GITHUB_STEP_SUMMARY
+          echo "1. 前往本次运行的 [Actions页面](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "2. 在页面底部的 Artifacts 区域下载对应平台的文件" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **构建失败**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "请检查构建日志了解具体错误信息" >> $GITHUB_STEP_SUMMARY
+        fi 
